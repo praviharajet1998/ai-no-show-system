@@ -1,8 +1,18 @@
-import Link from "next/link";
+import {
+  Percent,
+  Sparkles,
+  AlertTriangle,
+  CalendarDays,
+  ListTodo,
+  TrendingUp,
+  Building2,
+} from "lucide-react";
 
 import { getAppointmentsWithPredictions } from "@/lib/appointments-with-predictions";
 import { BackendUnreachable } from "@/components/backend-unreachable";
-import { RiskBadge } from "@/components/risk-badge";
+import { RiskDistributionChart } from "@/components/charts/risk-distribution-chart";
+import { DepartmentBreakdown } from "@/components/charts/department-breakdown";
+import { PriorityWorklist } from "@/components/priority-worklist";
 import {
   Card,
   CardContent,
@@ -10,15 +20,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import type { RiskCategory } from "@/lib/types";
-
-const CATEGORY_ORDER: RiskCategory[] = ["High", "Medium", "Low"];
-const CATEGORY_BAR_COLOR: Record<RiskCategory, string> = {
-  Low: "bg-emerald-500",
-  Medium: "bg-amber-500",
-  High: "bg-red-500",
-};
 
 export default async function AnalyticsPage() {
   let records;
@@ -30,136 +32,183 @@ export default async function AnalyticsPage() {
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  // Predictions stats
   const predicted = records.filter((r) => r.prediction);
-  const notYetPredicted = records.length - predicted.length;
+  const predictionCoverage = records.length > 0 ? (predicted.length / records.length) * 100 : 0;
 
   const categoryCounts: Record<RiskCategory, number> = { Low: 0, Medium: 0, High: 0 };
   for (const r of predicted) {
     categoryCounts[r.prediction!.risk_category] += 1;
   }
 
+  // Outcome stats
   const recordedOutcomes = records.filter((r) => r.appointment.no_show !== null);
-  const noShowCount = recordedOutcomes.filter((r) => r.appointment.no_show === true).length;
+  const noShows = recordedOutcomes.filter((r) => r.appointment.no_show === true).length;
+  const attended = recordedOutcomes.filter((r) => r.appointment.no_show === false).length;
   const noShowRate =
-    recordedOutcomes.length > 0 ? (noShowCount / recordedOutcomes.length) * 100 : null;
+    recordedOutcomes.length > 0 ? (noShows / recordedOutcomes.length) * 100 : null;
 
-  const upcomingHighRisk = records
-    .filter(
-      (r) =>
-        r.prediction?.risk_category === "High" &&
-        r.appointment.no_show === null &&
-        r.appointment.appointment_day >= todayStr
-    )
-    .sort((a, b) => a.appointment.appointment_day.localeCompare(b.appointment.appointment_day))
-    .slice(0, 5);
+  // Upcoming high/medium risk needing outreach
+  const outreachNeeded = records.filter(
+    (r) =>
+      r.prediction?.risk_category === "High" &&
+      r.appointment.no_show === null &&
+      r.appointment.appointment_day >= todayStr
+  ).length;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-10">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Analytics overview</h1>
-        <p className="text-sm text-muted-foreground">
-          Predicted risk and outcomes across all appointments.
+    <div className="flex w-full flex-col gap-6 p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="flex flex-col gap-1 border-b border-border/80 pb-5">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
+          Operations & Risk Analytics
+        </h1>
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          Aggregated predictive performance, department risk exposure, and attendance outcomes.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Total appointments" value={records.length} />
-        <StatCard label="Not yet predicted" value={notYetPredicted} />
-        <StatCard
-          label="No-show rate"
-          value={noShowRate === null ? "—" : `${noShowRate.toFixed(0)}%`}
-          hint={
-            recordedOutcomes.length > 0
-              ? `${recordedOutcomes.length} outcome${recordedOutcomes.length === 1 ? "" : "s"} recorded`
-              : "No outcomes recorded yet"
-          }
-        />
-        <StatCard label="Upcoming high risk" value={upcomingHighRisk.length} />
+      {/* Top 4 KPI Tiles */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/* KPI 1: No-Show Rate */}
+        <Card className="border-border/80 shadow-xs">
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">
+                Observed No-Show Rate
+              </span>
+              <span className="text-2xl font-bold tracking-tight tabular-nums text-foreground">
+                {noShowRate !== null ? `${noShowRate.toFixed(1)}%` : "—"}
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                {recordedOutcomes.length > 0
+                  ? `${noShows} no-shows / ${attended} attended`
+                  : "No outcomes recorded"}
+              </span>
+            </div>
+            <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Percent className="size-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI 2: AI Coverage */}
+        <Card className="border-border/80 shadow-xs">
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">
+                Model Prediction Coverage
+              </span>
+              <span className="text-2xl font-bold tracking-tight tabular-nums text-foreground">
+                {predictionCoverage.toFixed(0)}%
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                {predicted.length} of {records.length} appointments scored
+              </span>
+            </div>
+            <div className="flex size-10 items-center justify-center rounded-xl bg-secondary text-secondary-foreground">
+              <Sparkles className="size-5 text-primary" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI 3: High Risk Cases */}
+        <Card className="border-red-500/30 bg-red-500/[0.04] dark:bg-red-950/20 shadow-xs">
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-semibold text-red-700 dark:text-red-300">
+                High-Risk Outreach Pending
+              </span>
+              <span className="text-2xl font-bold tracking-tight tabular-nums text-red-700 dark:text-red-300">
+                {outreachNeeded}
+              </span>
+              <span className="text-[11px] text-red-600/80 dark:text-red-400/80">
+                {categoryCounts.High} high-risk cases total
+              </span>
+            </div>
+            <div className="flex size-10 items-center justify-center rounded-xl bg-red-500/20 text-red-600 dark:text-red-300">
+              <AlertTriangle className="size-5" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* KPI 4: Total Volume */}
+        <Card className="border-border/80 shadow-xs">
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground">
+                Total Appointments
+              </span>
+              <span className="text-2xl font-bold tracking-tight tabular-nums text-foreground">
+                {records.length}
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                Registered across clinic
+              </span>
+            </div>
+            <div className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <CalendarDays className="size-5" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Predicted risk distribution</CardTitle>
-          <CardDescription>
-            Across {predicted.length} appointment{predicted.length === 1 ? "" : "s"} with a
-            prediction.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {predicted.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No predictions yet — create an appointment to see risk distribution here.
-            </p>
-          ) : (
-            CATEGORY_ORDER.map((category) => {
-              const count = categoryCounts[category];
-              const pct = (count / predicted.length) * 100;
-              return (
-                <div key={category} className="flex items-center gap-3 text-sm">
-                  <span className="w-16 shrink-0 text-muted-foreground">{category}</span>
-                  <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className={cn("h-full rounded-full", CATEGORY_BAR_COLOR[category])}
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <span className="w-16 shrink-0 text-right tabular-nums text-muted-foreground">
-                    {count} ({pct.toFixed(0)}%)
-                  </span>
-                </div>
-              );
-            })
-          )}
-        </CardContent>
-      </Card>
+      {/* Charts Grid: Risk Distribution + Department Breakdown */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        {/* Risk Distribution Donut Card */}
+        <Card className="lg:col-span-5 border-border/80 shadow-xs">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="size-4 text-primary" />
+              <CardTitle className="text-base">Predicted Risk Distribution</CardTitle>
+            </div>
+            <CardDescription className="text-xs">
+              Breakdown across {predicted.length} appointments scored by XGBoost.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <RiskDistributionChart counts={categoryCounts} total={predicted.length} />
+          </CardContent>
+        </Card>
 
-      <Card>
+        {/* Department Breakdown Table Card */}
+        <Card className="lg:col-span-7 border-border/80 shadow-xs">
+          <CardHeader className="pb-2">
+            <div className="flex items-center gap-2">
+              <Building2 className="size-4 text-primary" />
+              <CardTitle className="text-base">Department-Level Risk Exposure</CardTitle>
+            </div>
+            <CardDescription className="text-xs">
+              Compare attendance volume and risk composition across clinic departments.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <DepartmentBreakdown records={records} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Actionable Priority Worklist */}
+      <Card className="border-border/80 shadow-xs">
         <CardHeader>
-          <CardTitle>Upcoming high-risk appointments</CardTitle>
-          <CardDescription>Prioritize these for outreach before the appointment date.</CardDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <ListTodo className="size-4 text-primary" />
+              <div>
+                <CardTitle className="text-base">
+                  Upcoming Priority Outreach Worklist
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Prioritize these patients for proactive confirmation calls and reminders before their appointment date.
+                </CardDescription>
+              </div>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2">
-          {upcomingHighRisk.length === 0 ? (
-            <p className="text-sm text-muted-foreground">None right now.</p>
-          ) : (
-            upcomingHighRisk.map(({ appointment, patient, prediction }) => (
-              <Link
-                key={appointment.id}
-                href={`/appointments/${appointment.id}`}
-                className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-2 text-sm transition-colors hover:bg-muted/50"
-              >
-                <div>
-                  <div className="font-medium">{patient?.full_name ?? "Unknown patient"}</div>
-                  <div className="text-muted-foreground">
-                    {appointment.appointment_day} · {appointment.department ?? "General"}
-                  </div>
-                </div>
-                <RiskBadge category={prediction!.risk_category} />
-              </Link>
-            ))
-          )}
+        <CardContent>
+          <PriorityWorklist records={records} />
         </CardContent>
       </Card>
     </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string | number;
-  hint?: string;
-}) {
-  return (
-    <Card size="sm">
-      <CardContent className="flex flex-col gap-1">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="text-2xl font-semibold tabular-nums">{value}</span>
-        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
-      </CardContent>
-    </Card>
   );
 }
